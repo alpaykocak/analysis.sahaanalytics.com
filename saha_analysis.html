@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Macroeconomic Radar</title>
+  <style>
+    :root{
+      --bg:#F5F7FA; --card:#ffffff; --muted:#6b7280; --accent:#0066FF;
+      --radius:10px; --shadow:0 6px 18px rgba(16,24,40,0.06); --gap:12px;
+      --axis:#6b7280;
+    }
+    html,body{height:100%;margin:0;font-family:Inter,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:#0f172a}
+    .wrap{max-width:1100px;margin:18px auto;padding:18px;}
+    .header{display:flex;align-items:center;gap:16px;margin-bottom:14px}
+    .logo{width:46px;height:46px;border-radius:8px;background:linear-gradient(135deg,var(--accent) 0%, #00B2CA 100%);
+      display:flex;align-items:center;justify-content:center;color:white;font-weight:700;letter-spacing:.5px}
+    h1{font-size:18px;margin:0}
+    p.lead{margin:0;color:var(--muted);font-size:13px}
+    .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px;margin-bottom:14px}
+
+    .controls{display:flex;flex-wrap:wrap;gap:var(--gap);align-items:flex-start}
+    .control{display:flex;flex-direction:column;min-width:160px}
+    label.small{font-size:12px;color:var(--muted);margin-bottom:6px}
+    .actions{margin-left:auto;display:flex;gap:10px;align-items:center}
+    button.btn{background:var(--accent);color:white;padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
+    button.secondary{background:#eef2ff;color:var(--accent);border:1px solid rgba(0,102,255,0.08);padding:8px 12px;border-radius:8px;cursor:pointer}
+
+    .country-box{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:6px 10px;padding:6px;border:1px solid #e6e9ef;border-radius:8px;background:#fff}
+    .country-box label{display:flex;align-items:center;gap:8px;font-size:13px;color:#111827;cursor:pointer}
+    .country-box input{transform:translateY(1px)}
+    .country-box label.hl{outline:2px solid var(--accent); background:#eef6ff; border-radius:6px;}
+
+    .plot-wrap{display:flex;gap:16px;align-items:flex-start}
+    .timebar{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:12px}
+    .time-title{font-weight:700;color:#0f172a}
+    .time-row{display:flex;align-items:center;gap:12px;width:100%}
+    .time-ends{display:flex;justify-content:space-between;align-items:center;width:100%;color:#1f2937}
+    .time-ends .end{font-size:12px;color:#374151}
+    .slider-wrap{position:relative;flex:1}
+    input[type=range]{width:100%}
+    .btns{display:flex;gap:8px;align-items:center;justify-content:center}
+    .btn-outline{background:white;border:2px solid #0f3a4a;color:#0f3a4a;border-radius:10px;padding:6px 10px;cursor:pointer;font-weight:700}
+    .btn-outline:active{transform:translateY(1px)}
+
+    .tooltip{
+      position:absolute; pointer-events:none; z-index:10;
+      background:#111827; color:#fff; font-size:12px; padding:6px 8px;
+      border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.15); display:none;
+      transform:translate(-50%,-110%); white-space:nowrap;
+    }
+    .tooltip .row{display:flex;align-items:center;gap:6px}
+    .tooltip .sw{width:10px;height:10px;border-radius:50%}
+
+    @media (max-width: 768px){
+      .plot-wrap{flex-direction:column}
+      .wrap{max-width:100%;padding:14px}
+      .country-box{grid-template-columns:repeat(1,minmax(160px,1fr))}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="logo">MR</div>
+      <div>
+        <h1>Macroeconomic Radar</h1>
+        <p class="lead">
+          Slice by <b>Country</b>, <b>Sector</b>, and <b>Indicator</b>. Click points on the chart to show/hide animated <b>4-period trails</b>.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="controls">
+        <div class="control" style="min-width:260px">
+          <label class="small" id="lblCountry">Country</label>
+          <div id="countryChecks" class="country-box"></div>
+        </div>
+
+        <div class="control" style="min-width:260px">
+          <label class="small" id="lblSector">Sector</label>
+          <div id="sectorChecks" class="country-box"></div>
+        </div>
+
+        <div class="control" style="min-width:260px">
+          <label class="small" id="lblIndicator">Indicator</label>
+          <div id="indicatorChecks" class="country-box"></div>
+        </div>
+
+        <div class="actions">
+          <button class="secondary" id="btnReset">Reset Filters</button>
+          <button class="secondary" id="btnResetTraces">Reset Trace Lines</button>
+          <div class="control" style="min-width:120px">
+            <label class="small" id="lblLang">Language</label>
+            <select id="selLang">
+              <option value="en">English</option>
+              <option value="tr">Türkçe</option>
+              <option value="ar">العربية</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="plot-wrap">
+        <div style="position:relative">
+          <canvas id="plot" width="840" height="520"></canvas>
+          <div id="tooltip" class="tooltip"></div>
+        </div>
+      </div>
+
+      <div class="timebar">
+        <div class="time-title" id="timeTitle">—</div>
+        <div class="time-row">
+          <div class="time-ends">
+            <div class="end"><span id="startMonth">—</span><br><span id="startYear" class="muted">—</span></div>
+            <div class="slider-wrap">
+              <input type="range" min="0" max="0" value="0" id="timeSlider" />
+            </div>
+            <div class="end" style="text-align:right"><span id="endMonth">—</span><br><span id="endYear" class="muted">—</span></div>
+          </div>
+        </div>
+        <div class="btns">
+          <button class="btn-outline" id="btnPrev">‹</button>
+          <button class="btn-outline" id="btnPlay">▶</button>
+          <button class="btn-outline" id="btnNext">›</button>
+          <span class="small-note" id="shownNote">Shown points: <span id="noteCount">0</span></span>
+        </div>
+      </div>
+
+      <div id="footerNote" class="small-note" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- i18n ----------
+    const I18N = {
+      en: { footer:"© SAHA Analytics 2025. All rights reserved.", title:"Macroeconomic Radar",
+        country:"Country", sector:"Sector", indicator:"Indicator",
+        reset:"Reset Filters", resetTraces:"Reset Trace Lines", langLabel:"Language", shownPoints:"Shown points:",
+        play:"▶", pause:"⏸",
+        monthsShort:{Jan:"Jan",Feb:"Feb",Mar:"Mar",Apr:"Apr",May:"May",Jun:"Jun",Jul:"Jul",Aug:"Aug",Sep:"Sep",Oct:"Oct",Nov:"Nov",Dec:"Dec"},
+        monthsFull:{Jan:"January",Feb:"February",Mar:"March",Apr:"April",May:"May",Jun:"June",Jul:"July",Aug:"August",Sep:"September",Oct:"October",Nov:"November",Dec:"December"},
+        phases:{what:"Expansion",where:"Recovery",how:"Slowdown",who:"Recession"},
+        varLabels:{GDP:"GDP",Jobs:"Jobs",ValueAdded:"Value Added"}, all:"All"
+      },
+      tr: { footer:"© SAHA Analytics 2025. Tüm hakları saklıdır.", title:"Makroekonomik Radar",
+        country:"Ülke", sector:"Sektör", indicator:"Gösterge",
+        reset:"Filtreleri Sıfırla", resetTraces:"İz Çizgilerini Sıfırla", langLabel:"Dil", shownPoints:"Gösterilen nokta:",
+        play:"▶", pause:"⏸",
+        monthsShort:{Jan:"Oca",Feb:"Şub",Mar:"Mar",Apr:"Nis",May:"May",Jun:"Haz",Jul:"Tem",Aug:"Ağu",Sep:"Eyl",Oct:"Eki",Nov:"Kas",Dec:"Ara"},
+        monthsFull:{Jan:"Ocak",Feb:"Şubat",Mar:"Mart",Apr:"Nisan",May:"Mayıs",Jun:"Haziran",Jul:"Temmuz",Aug:"Ağustos",Sep:"Eylül",Oct:"Ekim",Nov:"Kasım",Dec:"Aralık"},
+        phases:{what:"Genişleme",where:"Toparlanma",how:"Yavaşlama",who:"Daralma"},
+        varLabels:{GDP:"GSYH",Jobs:"İstihdam",ValueAdded:"Katma Değer"}, all:"Tümü"
+      },
+      ar: { footer:"© SAHA Analytics 2025. جميع الحقوق محفوظة.", title:"رادار الاقتصاد الكلي",
+        country:"الدولة", sector:"القطاع", indicator:"المؤشر",
+        reset:"إعادة التصفية", resetTraces:"إعادة تعيين خطوط التتبع", langLabel:"اللغة", shownPoints:"عدد النقاط المعروضة:",
+        play:"▶", pause:"⏸",
+        monthsShort:{Jan:"ينا",Feb:"فبر",Mar:"مار",Apr:"أبر",May:"ماي",Jun:"يون",Jul:"يول",Aug:"أغس",Sep:"سبت",Oct:"أكت",Nov:"نوف",Dec:"ديس"},
+        monthsFull:{Jan:"يناير",Feb:"فبراير",Mar:"مارس",Apr:"أبريل",May:"مايو",Jun:"يونيو",Jul:"يوليو",Aug:"أغسطس",Sep:"سبتمبر",Oct:"أكتوبر",Nov:"نوفمبر",Dec:"ديسمبر"},
+        phases:{what:"التوسع",where:"التعافي",how:"التباطؤ",who:"الركود"},
+        varLabels:{GDP:"الناتج المحلي",Jobs:"الوظائف",ValueAdded:"القيمة المضافة"}, all:"الكل"
+      }
+    };
+    let LANG = localStorage.getItem('saha_lang') || 'en';
+    const L = () => (LANG==='ar'?'ar':LANG==='tr'?'tr':'en');
+
+    // ---------- Dimensions ----------
+    const DIM = {
+      countries:[
+        {id:"Saudi Arabia",en:"Saudi Arabia",tr:"Suudi Arabistan",ar:"السعودية"},
+        {id:"UAE",en:"UAE",tr:"BAE",ar:"الإمارات"},
+        {id:"Egypt",en:"Egypt",tr:"Mısır",ar:"مصر"},
+        {id:"Germany",en:"Germany",tr:"Almanya",ar:"ألمانيا"},
+        {id:"UK",en:"UK",tr:"Birleşik Krallık",ar:"المملكة المتحدة"},
+      ],
+      sectors:[
+        {id:"Energy",en:"Energy",tr:"Enerji",ar:"الطاقة"},
+        {id:"Tourism",en:"Tourism",tr:"Turizm",ar:"السياحة"},
+        {id:"Manufacturing",en:"Manufacturing",tr:"İmalat",ar:"التصنيع"},
+      ],
+      variables:[
+        {id:"GDP",en:"GDP",tr:"GSYH",ar:"الناتج المحلي"},
+        {id:"Jobs",en:"Jobs",tr:"İstihdam",ar:"الوظائف"},
+        {id:"ValueAdded",en:"Value Added",tr:"Katma Değer",ar:"القيمة المضافة"},
+      ],
+    };
+    const countryLabel=id=>(DIM.countries.find(x=>x.id===id)?.[L()]||DIM.countries.find(x=>x.id===id)?.en||id);
+    const sectorLabel =id=>(DIM.sectors.find(x=>x.id===id)?.[L()]||DIM.sectors.find(x=>x.id===id)?.en||id);
+    const variableLabel=id=>(DIM.variables.find(x=>x.id===id)?.[L()]||DIM.variables.find(x=>x.id===id)?.en||id);
+
+    // ---------- Demo data ----------
+    const countries = DIM.countries.map(x=>x.id);
+    const sectors   = DIM.sectors.map(x=>x.id);
+    const variables = DIM.variables.map(x=>x.id);
+    const years     = Array.from({length:12},(_,i)=>2019+i);
+    const monthsOrder = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const quarterOrder= ["Q1","Q2","Q3","Q4"];
+    const quarterOf = m => (["Q1","Q1","Q1","Q2","Q2","Q2","Q3","Q3","Q3","Q4","Q4","Q4"])[monthsOrder.indexOf(m)];
+    let seed=1337; function rnd(){ seed=(seed*1664525+1013904223)%4294967296; return seed/4294967296; }
+    function rUniform(a,b){ return a+(b-a)*rnd(); }
+    const DATA=[];
+    for (const country of countries){
+      for (const sector of sectors){
+        for (const variable of variables){
+          for (const y of years){
+            for (const m of monthsOrder){
+              DATA.push({ country, year:y, quarter:quarterOf(m), month:m, sector, variable,
+                x_value:+rUniform(-3,3).toFixed(2), y_value:+rUniform(-3,3).toFixed(2) });
+            }
+          }
+        }
+      }
+    }
+
+    // ---------- Elements ----------
+    const countryChecks = document.getElementById('countryChecks');
+    const sectorChecksEl = document.getElementById('sectorChecks');
+    const indicatorChecksEl = document.getElementById('indicatorChecks');
+    const btnReset   = document.getElementById('btnReset');
+    const btnResetTraces = document.getElementById('btnResetTraces');
+    const selLang    = document.getElementById('selLang');
+
+    const canvas   = document.getElementById('plot');
+    const ctx      = canvas.getContext('2d');
+
+    const timeSlider = document.getElementById('timeSlider');
+    const timeTitle  = document.getElementById('timeTitle');
+    const startMonth = document.getElementById('startMonth');
+    const startYear  = document.getElementById('startYear');
+    const endMonth   = document.getElementById('endMonth');
+    const endYear    = document.getElementById('endYear');
+
+    const btnPlay = document.getElementById('btnPlay');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnNext = document.getElementById('btnNext');
+
+    const shownNote = document.getElementById('shownNote');
+    let   noteCount = document.getElementById('noteCount');
+    const tooltipEl  = document.getElementById('tooltip');
+
+    // ---------- Timeline / Animation ----------
+    let timeline=[]; let tIndex=0; let playTimer=null;
+    let snakePhase=0, rafId=null;
+    function animateTrail(){
+      if (state.activeTraces.size){
+        snakePhase = (snakePhase + 0.35) % 10000;
+        render();
+        rafId = requestAnimationFrame(animateTrail);
+      } else if (rafId){ cancelAnimationFrame(rafId); rafId=null; }
+    }
+    function ensureAnim(){ if (!rafId) rafId = requestAnimationFrame(animateTrail); }
+    function stopAnim(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
+
+    // ---------- State ----------
+    const state = {
+      data: DATA.slice(),
+      filtered: [],
+      selectedCountries: new Set(countries),   // default All
+      selectedSectors:  new Set(['Tourism']),  // default only Tourism
+      selectedIndicators: new Set(['GDP']),    // default only GDP
+      activeTraces: new Set(),                 // set of "country|sector|variable"
+      highlightCountry: null,
+      highlightSector: null,
+    };
+    const renderDots=[];
+    const isMultiCountry = () => state.selectedCountries.size !== 1;
+    const traceKey = d => `${d.country}|${d.sector}|${d.variable}`;
+    const parseKey = k => { const [country,sector,variable]=k.split('|'); return {country,sector,variable}; };
+
+    // ---------- Colors ----------
+    const VAR_COLORS = { GDP:'#1f77b4', Jobs:'#ff7f0e', ValueAdded:'#2ca02c' };
+    function hashStr(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+    function colorForPair(country, sector){
+      const key=`${country}|${sector}`;
+      const h = hashStr(key);
+      const hue = h % 360;
+      return `hsl(${hue} 70% 48%)`;
+    }
+
+    // ---------- Timeline ----------
+    function buildTimeline(){
+      const set=new Set();
+      for (const d of state.data){
+        const q=d.quarter||quarterOf(d.month);
+        set.add(JSON.stringify({year:d.year,quarter:q,month:d.month}));
+      }
+      timeline=Array.from(set).map(s=>JSON.parse(s));
+      timeline.sort((a,b)=>{
+        if (a.year!==b.year) return a.year-b.year;
+        const qa=quarterOrder.indexOf(a.quarter), qb=quarterOrder.indexOf(b.quarter);
+        if (qa!==qb) return qa-qb;
+        return monthsOrder.indexOf(a.month)-monthsOrder.indexOf(b.month);
+      });
+    }
+    function currentTick(){ return timeline[tIndex]||{year:'-',quarter:'-',month:'-'}; }
+    function updateTimeLabel(){
+      const tick=currentTick();
+      const M=I18N[L()].monthsFull||I18N.en.monthsFull;
+      timeTitle.textContent = `${M[tick.month]} ${tick.year}`;
+    }
+    function phaseLabel(which){ return (I18N[L()].phases?.[which] ?? which); }
+    function updateEnds(){
+      const first=timeline[0], last=timeline[timeline.length-1];
+      const Ms=I18N[L()].monthsFull||I18N.en.monthsFull;
+      startMonth.textContent=Ms[first.month]; startYear.textContent=first.year;
+      endMonth.textContent=Ms[last.month];   endYear.textContent=last.year;
+    }
+    function setInitialTickToCurrent(){
+      if (!timeline.length) return;
+      const now=new Date(); const cy=now.getFullYear(); const cm=monthsOrder[now.getMonth()];
+      let idx=timeline.findIndex(t=>Number(t.year)===cy && t.month===cm);
+      if (idx===-1) idx=timeline.findIndex(t=>Number(t.year)===cy);
+      if (idx===-1) idx=timeline.length-1;
+      tIndex=idx; timeSlider.value=String(tIndex);
+    }
+    function populateControls(){
+      buildCountryChecks();
+      buildSectorChecks();
+      buildIndicatorChecks();
+      buildTimeline();
+      timeSlider.min=0; timeSlider.max=Math.max(0,timeline.length-1);
+      setInitialTickToCurrent();
+      enforceSelectionRules();
+      updateHighlightsUI();
+      updateTimeLabel(); updateEnds();
+    }
+
+    // ---------- Mode & Filter ----------
+    function getMode(){
+      const n = state.selectedCountries.size;
+      if (n === 1) return 'byCountry';
+      if (n > 1)  return 'bySector';
+      return 'invalid';
+    }
+
+    function applyFilters(){
+      const {year, quarter, month} = currentTick();
+      const n = state.selectedCountries.size;
+      let filtered = [];
+
+      const indicatorSet = state.selectedIndicators.size ? state.selectedIndicators : new Set(['GDP']);
+
+      if (n === 1){
+        const onlyCountry = [...state.selectedCountries][0];
+        const sectorSet = state.selectedSectors.size ? state.selectedSectors : new Set(sectors);
+        filtered = state.data.filter(d =>
+          d.country===onlyCountry &&
+          sectorSet.has(d.sector) &&
+          indicatorSet.has(d.variable) &&
+          String(d.year)===String(year) &&
+          String(d.quarter)===String(quarter) &&
+          String(d.month)===String(month)
+        );
+      } else if (n > 1){
+        const onlySector = [...state.selectedSectors][0] || 'Tourism';
+        filtered = state.data.filter(d =>
+          state.selectedCountries.has(d.country) &&
+          d.sector===onlySector &&
+          indicatorSet.has(d.variable) &&
+          String(d.year)===String(year) &&
+          String(d.quarter)===String(quarter) &&
+          String(d.month)===String(month)
+        );
+      }
+
+      state.filtered = filtered;
+      noteCount.textContent = filtered.length;
+      updateTimeLabel();
+      updateModeBanner(getMode());
+    }
+
+    // ---------- Plot helpers ----------
+    const margin={left:60,right:20,top:20,bottom:50};
+    function toCanvasX(x){ const w=canvas.width-margin.left-margin.right; return margin.left+((x+3)/6)*w; }
+    function toCanvasY(y){ const h=canvas.height-margin.top-margin.bottom; return margin.top+((3-y)/6)*h; }
+    function rectDataFill(x1,x2,y1,y2,color){
+      const cx1=toCanvasX(x1), cx2=toCanvasX(x2);
+      const cy1=toCanvasY(y1), cy2=toCanvasY(y2);
+      const left=Math.min(cx1,cx2), top=Math.min(cy1,cy2);
+      const w=Math.abs(cx2-cx1), h=Math.abs(cy2-cy1);
+      ctx.fillStyle=color; ctx.fillRect(left,top,w,h);
+    }
+    function getIconSize(){ return (window.innerWidth<=768)?48:56; }
+
+    function drawCornerIconAt(ix, iy, which, opts = {}){
+      if (!ctx) return;
+      ctx.save();
+      const size  = opts.size ?? getIconSize();
+      const pad   = (size <= 48 ? 5 : 6);
+      const alpha = opts.alpha ?? 0.28;
+      const stroke = opts.stroke ?? '#111827';
+      const txtColor = opts.textColor ?? '#0f172a';
+      const txtFont  = opts.textFont ?? ((size <= 48) ? 'bold 11px sans-serif' : 'bold 12px sans-serif');
+      const showFrame = opts.frame ?? true;
+      const labelText = opts.label ?? phaseLabel(which);  // <-- DÜZELTME
+
+      if (showFrame){
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.2;
+        ctx.strokeRect(ix + 0.5, iy + 0.5, size - 1, size - 1);
+      }
+
+      const midX = ix + size/2, midY = iy + size/2;
+      let fillColor = '#93C572';
+      if (which === 'where') fillColor = '#FFE600';
+      if (which === 'how')   fillColor = '#FF7A00';
+      if (which === 'who')   fillColor = '#990000';
+
+      let qx1 = ix, qy1 = iy, qw = size/2, qh = size/2;
+      if (which === 'what'){ qx1 = midX; qy1 = iy;    }
+      if (which === 'where'){ qx1 = midX; qy1 = midY; }
+      if (which === 'how')  { qx1 = ix;   qy1 = iy;   }
+      if (which === 'who')  { qx1 = ix;   qy1 = midY; }
+
+      ctx.globalAlpha = alpha; ctx.fillStyle = fillColor;
+      ctx.fillRect(qx1, qy1, qw, qh);
+      ctx.globalAlpha = 1;
+
+      if (typeof ctx.setLineDash === 'function') ctx.setLineDash([2,2]);
+      ctx.strokeStyle = stroke; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(ix + pad, midY); ctx.lineTo(ix + size - pad, midY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(midX, iy + pad); ctx.lineTo(midX, iy + size - pad); ctx.stroke();
+      if (typeof ctx.setLineDash === 'function') ctx.setLineDash([]);
+
+      const innerW = size - 2*pad, innerH = size - 2*pad;
+      const mapX = x => ix + pad + ((x + 3) / 6) * innerW;
+      const mapY = y => iy + pad + ((3 - y) / 6) * innerH;
+
+      const pts = [{x:-3,y:3},{x:-2,y:0},{x:0,y:-2},{x:2,y:0},{x:3,y:3}];
+      ctx.save();
+      ctx.lineCap='round'; ctx.strokeStyle='#0B5CAD'; ctx.lineWidth=1.6;
+      ctx.beginPath(); ctx.moveTo(mapX(pts[0].x), mapY(pts[0].y));
+      for (let i=1;i<pts.length;i++){ ctx.lineTo(mapX(pts[i].x), mapY(pts[i].y)); }
+      ctx.stroke();
+      ctx.restore();
+
+      // highlight stroke inside the active quadrant
+      const rx1=qx1, ry1=qy1, rx2=qx1+qw, ry2=qy1+qh;
+      ctx.save(); ctx.lineCap='round'; ctx.strokeStyle='#0B5CAD'; ctx.lineWidth=(size<=48?3.2:3.6);
+      for (let i=0;i<pts.length-1;i++){
+        const x0=mapX(pts[i].x), y0=mapY(pts[i].y);
+        const x1=mapX(pts[i+1].x), y1=mapY(pts[i+1].y);
+        const p=[-(x1-x0),(x1-x0),-(y1-y0),(y1-y0)];
+        const q=[x0-rx1,rx2-x0,y0-ry1,ry2-y0];
+        let u1=0,u2=1, ok=true;
+        for(let k=0;k<4;k++){
+          if (p[k]===0){ if(q[k]<0){ ok=false; break; } }
+          else {
+            const t=q[k]/p[k];
+            if (p[k]<0){ if (t>u2){ ok=false; break; } if (t>u1) u1=t; }
+            else { if (t<u1){ ok=false; break; } if (t<u2) u2=t; }
+          }
+        }
+        if (ok){
+          const cx0=x0+(x1-x0)*u1, cy0=y0+(y1-y0)*u1;
+          const cx1=x0+(x1-x0)*u2, cy1=y0+(y1-y0)*u2;
+          ctx.beginPath(); ctx.moveTo(cx0,cy0); ctx.lineTo(cx1,cy1); ctx.stroke();
+        }
+      }
+      ctx.restore();
+
+      // ---- ETİKET (yazılar)  ----  <-- DÜZELTME
+      ctx.fillStyle = txtColor;
+      ctx.font = txtFont;
+      const indent = (size <= 48 ? 3 : 4);
+
+      if (which === 'what'){
+        ctx.textAlign = (document.dir === 'rtl' ? 'left' : 'right');
+        ctx.textBaseline = 'top';
+        const tx = ix + (document.dir === 'rtl' ? pad + indent : size - pad - indent);
+        ctx.fillText(labelText, tx, iy + pad);
+      }
+      if (which === 'where'){
+        ctx.textAlign = (document.dir === 'rtl' ? 'left' : 'right');
+        ctx.textBaseline = 'bottom';
+        const tx = ix + (document.dir === 'rtl' ? pad + indent : size - pad - indent);
+        ctx.fillText(labelText, tx, iy + size - pad);
+      }
+      if (which === 'how'){
+        ctx.textAlign = (document.dir === 'rtl' ? 'right' : 'left');
+        ctx.textBaseline = 'top';
+        const tx = ix + (document.dir === 'rtl' ? size - pad - indent : pad + indent);
+        ctx.fillText(labelText, tx, iy + pad);
+      }
+      if (which === 'who'){
+        ctx.textAlign = (document.dir === 'rtl' ? 'right' : 'left');
+        ctx.textBaseline = 'bottom';
+        const tx = ix + (document.dir === 'rtl' ? size - pad - indent : pad + indent);
+        ctx.fillText(labelText, tx, iy + size - pad);
+      }
+
+      ctx.restore();
+    }
+
+    function drawCornerBadges(){   // <-- DÜZELTME: çağrılar burada
+      const w=canvas.width, h=canvas.height;
+      const gap=8, size=getIconSize();
+      const left=margin.left, right=w-margin.right, top=margin.top, bottom=h-margin.bottom;
+
+      drawCornerIconAt(left+gap,          top+gap,           'how',   {alpha:0.28, size, label: phaseLabel('how')});
+      drawCornerIconAt(right-gap-size,    top+gap,           'what',  {alpha:0.28, size, label: phaseLabel('what')});
+      drawCornerIconAt(left+gap,          bottom-gap-size,   'who',   {alpha:0.28, size, label: phaseLabel('who')});
+      drawCornerIconAt(right-gap-size,    bottom-gap-size,   'where', {alpha:0.28, size, label: phaseLabel('where')});
+    }
+
+    function clearCanvas(){ ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+    function drawAxes(){
+      const w=canvas.width, h=canvas.height;
+      ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--axis')||'#6b7280';
+      ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(margin.left,toCanvasY(0)); ctx.lineTo(w-margin.right,toCanvasY(0)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(toCanvasX(0),margin.top);  ctx.lineTo(toCanvasX(0),h-margin.bottom); ctx.stroke();
+    }
+
+    // --------- Points & Trails ---------
+    function drawPoints(){
+      renderDots.length = 0;
+
+      const groups = {};
+      state.filtered.forEach(d => { const k = String(d.variable); (groups[k] ||= []).push(d); });
+
+      Object.keys(groups).forEach(v=>{
+        const col = VAR_COLORS[v] || '#888';
+        ctx.fillStyle = col; ctx.strokeStyle='rgba(0,0,0,0.08)'; ctx.lineWidth=1;
+        groups[v].forEach(d=>{
+          const cx = toCanvasX(d.x_value), cy = toCanvasY(d.y_value);
+          const selected = state.activeTraces.has(traceKey(d));
+          const isHl = (state.highlightCountry && d.country===state.highlightCountry) ||
+                       (state.highlightSector  && d.sector===state.highlightSector) ||
+                       selected;
+          const r = 5 + (hoverMatch(d)?2:0) + (isHl?2:0);
+
+          ctx.globalAlpha = isHl?1:0.95;
+          ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill(); ctx.stroke();
+
+          if (isHl){
+            ctx.save();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+            ctx.beginPath(); ctx.arc(cx,cy,r+1.5,0,Math.PI*2); ctx.stroke();
+            ctx.restore();
+          }
+
+          renderDots.push({cx,cy,r,d,color:col});
+        });
+      });
+
+      ctx.globalAlpha = 1;
+      drawActiveTraces();
+    }
+
+    function catmullRomToPoints(pts, samplesPerSeg=14){
+      if (pts.length<2) return pts;
+      const out=[]; const P=[pts[0],...pts,pts[pts.length-1]];
+      for (let i=0;i<P.length-3;i++){
+        const p0=P[i], p1=P[i+1], p2=P[i+2], p3=P[i+3];
+        for (let j=0;j<=samplesPerSeg;j++){
+          const t=j/samplesPerSeg, t2=t*t, t3=t2*t;
+          const x=0.5*((2*p1.x)+(-p0.x+p2.x)*t+(2*p0.x-5*p1.x+4*p2.x-p3.x)*t2+(-p0.x+3*p1.x-3*p2.x+p3.x)*t3);
+          const y=0.5*((2*p1.y)+(-p0.y+p2.y)*t+(2*p0.y-5*p1.y+4*p2.y-p3.y)*t2+(-p0.y+3*p1.y-3*p2.y+p3.y)*t3);
+          out.push({x,y});
+        }
+      }
+      return out;
+    }
+
+    function traceAllowed(country, sector, variable){
+      const mode = getMode();
+      const indicatorOk = state.selectedIndicators.has(variable);
+      if (mode==='byCountry'){
+        const onlyCountry = [...state.selectedCountries][0];
+        return indicatorOk && (country===onlyCountry) && state.selectedSectors.has(sector);
+      } else if (mode==='bySector'){
+        const onlySector = [...state.selectedSectors][0];
+        return indicatorOk && state.selectedCountries.has(country) && (sector===onlySector);
+      }
+      return false;
+    }
+
+    function drawActiveTraces(){
+      if (!state.activeTraces.size) return;
+
+      const idxs=[tIndex,tIndex-1,tIndex-2,tIndex-3].map(i=>Math.max(0,Math.min(timeline.length-1,i)));
+      const uniqueIdxs=[...new Set(idxs)].sort((a,b)=>a-b);
+
+      state.activeTraces.forEach(key=>{
+        const {country,sector,variable} = parseKey(key);
+        if (!traceAllowed(country,sector,variable)) return;
+
+        const raw = uniqueIdxs.map(i=>{
+          const tick = timeline[i];
+          const items = state.data.filter(d =>
+            d.country===country && d.variable===variable &&
+            d.sector===sector &&
+            String(d.year)===String(tick.year) &&
+            String(d.quarter)===String(tick.quarter) &&
+            String(d.month)===String(tick.month)
+          );
+          if (!items.length) return null;
+          const avg = items.reduce((a,b)=>({x:a.x+b.x_value,y:a.y+b.y_value}),{x:0,y:0});
+          return {x:toCanvasX(avg.x/items.length), y:toCanvasY(avg.y/items.length)};
+        }).filter(Boolean);
+        if (raw.length<2) return;
+
+        const smooth = catmullRomToPoints(raw, 14);
+        const isHl = (state.highlightCountry===country) || (state.highlightSector===sector);
+        const baseColor = colorForPair(country, sector);
+
+        ctx.save();
+        ctx.lineCap='round'; ctx.lineJoin='round';
+        ctx.setLineDash([10,12]);
+        ctx.lineDashOffset = -snakePhase;
+
+        ctx.strokeStyle = baseColor;
+        ctx.globalAlpha = isHl ? 1.0 : 0.85;
+        ctx.lineWidth   = isHl ? 3.0 : 2.2;
+
+        ctx.beginPath(); ctx.moveTo(smooth[0].x, smooth[0].y);
+        for (let i=1;i<smooth.length;i++) ctx.lineTo(smooth[i].x, smooth[i].y);
+        ctx.stroke();
+
+        ctx.globalAlpha = isHl ? 0.35 : 0.22;
+        ctx.lineWidth   = isHl ? 5.0  : 4.2;
+        ctx.stroke();
+
+        const head = smooth[smooth.length-1];
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.95; ctx.fillStyle = baseColor;
+        ctx.beginPath(); ctx.arc(head.x, head.y, isHl?4.2:3.6, 0, Math.PI*2); ctx.fill();
+
+        ctx.fillStyle='#0f172a'; ctx.font='12px sans-serif';
+        ctx.fillText(`${countryLabel(country)} • ${sectorLabel(sector)} • ${variableLabel(variable)}`, head.x+6, head.y-6);
+        ctx.restore();
+      });
+
+      ensureAnim();
+    }
+
+    // ---------- Hover / Tooltip / Click ----------
+    let hover=null;
+    function hoverMatch(d){ return hover && hover.d===d; }
+    function onMouseMove(e){
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      let found = null;
+      for (let i=0;i<renderDots.length;i++){
+        const p = renderDots[i];
+        const dx = p.cx - mx, dy = p.cy - my;
+        if (dx*dx + dy*dy <= (p.r+4)*(p.r+4)){ found = p; break; }
+      }
+
+      if (found){
+        hover = found;
+        showTooltip(found, mx, my);
+      } else {
+        hover = null; hideTooltip();
+      }
+      render();
+    }
+    function onCanvasClick(e){
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      let found = null;
+      for (let i=0;i<renderDots.length;i++){
+        const p = renderDots[i];
+        const dx = p.cx - mx, dy = p.cy - my;
+        if (dx*dx + dy*dy <= (p.r+6)*(p.r+6)){ found = p; break; }
+      }
+      if (!found) return;
+
+      const key = traceKey(found.d);
+      if (state.activeTraces.has(key)) state.activeTraces.delete(key);
+      else state.activeTraces.add(key);
+
+      if (state.activeTraces.size) ensureAnim(); else stopAnim();
+      render();
+    }
+
+    function showTooltip(p, mx, my){
+      const d = p.d;
+      const M = I18N[L()].monthsShort || I18N.en.monthsShort;
+      tooltipEl.innerHTML = `
+        <div class="row"><span class="sw" style="background:${p.color}"></span><strong>${variableLabel(d.variable)}</strong></div>
+        <div class="row">${countryLabel(d.country)} • ${sectorLabel(d.sector)}</div>
+        <div class="row" class="muted">${M[d.month]} ${d.year} — (x: ${d.x_value}, y: ${d.y_value})</div>
+      `;
+      tooltipEl.style.display = 'block';
+
+      const container = canvas.parentElement;
+      const crect = container.getBoundingClientRect();
+      const tw = tooltipEl.offsetWidth || 0;
+      const th = tooltipEl.offsetHeight || 0;
+      const pad = 8;
+      const minX = pad + tw * 0.5;
+      const maxX = crect.width - pad - tw * 0.5;
+      const minY = pad + th * 1.1;
+      const maxY = crect.height - pad;
+
+      let lx = Math.max(minX, Math.min(maxX, mx));
+      let ly = Math.max(minY, Math.min(maxY, my));
+
+      tooltipEl.style.left = lx + 'px';
+      tooltipEl.style.top  = ly + 'px';
+    }
+    function hideTooltip(){ tooltipEl.style.display='none'; }
+
+    // ---------- Footer / Lang ----------
+    function setFooter(){ const el=document.getElementById('footerNote'); if(!el) return; el.textContent=I18N[L()].footer; el.dir=(L()==='ar')?'rtl':'ltr'; }
+    function applyLang(){
+      document.documentElement.lang = (L()==='ar'?'ar':L());
+      document.documentElement.dir  = (L()==='ar'?'rtl':'ltr');
+      document.querySelector('h1').textContent = I18N[L()].title;
+      document.getElementById('lblCountry').textContent = I18N[L()].country;
+      document.getElementById('lblSector').textContent  = I18N[L()].sector;
+      document.getElementById('lblIndicator').textContent = I18N[L()].indicator;
+      document.getElementById('lblLang').textContent    = I18N[L()].langLabel;
+      btnReset.textContent       = I18N[L()].reset;
+      btnResetTraces.textContent = I18N[L()].resetTraces;
+      btnPlay.textContent        = playTimer ? I18N[L()].pause : I18N[L()].play;
+      shownNote.innerHTML        = `${I18N[L()].shownPoints} <span id="noteCount">${state.filtered?.length||0}</span>`;
+      noteCount = document.getElementById('noteCount');
+
+      const savedCountries = new Set(state.selectedCountries);
+      const savedSectors   = new Set(state.selectedSectors);
+      const savedIndicators= new Set(state.selectedIndicators);
+      const savedHC = state.highlightCountry;
+      const savedHS = state.highlightSector;
+      const savedTraces = new Set(state.activeTraces);
+
+      buildCountryChecks();
+      buildSectorChecks();
+      buildIndicatorChecks();
+
+      state.selectedCountries = savedCountries;
+      state.selectedSectors   = savedSectors;
+      state.selectedIndicators= savedIndicators;
+      state.highlightCountry  = savedHC;
+      state.highlightSector   = savedHS;
+      state.activeTraces      = savedTraces;
+
+      syncSectorCheckboxUI();
+      syncIndicatorCheckboxUI();
+      updateHighlightsUI();
+
+      setFooter(); updateTimeLabel(); updateEnds(); render();
+    }
+
+    // ---------- UI: Country ----------
+    function buildCountryChecks(){
+      countryChecks.innerHTML='';
+      const allId='cAll';
+      const allLabel=document.createElement('label');
+      allLabel.innerHTML=`<input type="checkbox" id="${allId}" ${state.selectedCountries.size===countries.length?'checked':''} /> <span class="lbl">${I18N[L()].all}</span>`;
+      countryChecks.appendChild(allLabel);
+
+      document.getElementById(allId).addEventListener('change',(e)=>{
+        if (e.target.checked){
+          state.selectedCountries=new Set(countries);
+          countries.forEach(id=>{ const el=document.getElementById('c_'+id); if(el) el.checked=true; });
+        } else {
+          state.selectedCountries.clear();
+        }
+        enforceSelectionRules();
+        applyFilters(); render();
+        if (state.activeTraces.size) ensureAnim();
+      });
+
+      DIM.countries.forEach(c=>{
+        const id='c_'+c.id;
+        const lab=document.createElement('label');
+        lab.dataset.key = c.id;
+        lab.innerHTML=`<input type="checkbox" id="${id}" ${state.selectedCountries.has(c.id)?'checked':''} /> <span class="lbl">${countryLabel(c.id)}</span>`;
+        countryChecks.appendChild(lab);
+
+        lab.querySelector('input').addEventListener('change',()=>{
+          const el=lab.querySelector('input');
+          if (el.checked) state.selectedCountries.add(c.id);
+          else            state.selectedCountries.delete(c.id);
+          const allEl=document.getElementById(allId);
+          allEl.checked=(state.selectedCountries.size===countries.length);
+          enforceSelectionRules();
+          applyFilters(); render();
+          if (state.activeTraces.size) ensureAnim();
+        });
+        lab.querySelector('.lbl').addEventListener('click',(e)=>{
+          e.preventDefault(); e.stopPropagation();
+          state.highlightCountry = (state.highlightCountry===c.id ? null : c.id);
+          state.highlightSector  = null;
+          updateHighlightsUI();
+          render();
+        });
+      });
+    }
+
+    // ---------- UI: Sector ----------
+    function buildSectorChecks(){
+      const box = sectorChecksEl;
+      box.innerHTML = '';
+
+      const allId = 'sAll';
+      const allLabel = document.createElement('label');
+      const allChecked = (state.selectedSectors.size === sectors.length);
+      allLabel.innerHTML = `<input type="checkbox" id="${allId}" ${allChecked?'checked':''}/> <span class="lbl">${I18N[L()].all}</span>`;
+      box.appendChild(allLabel);
+
+      box.querySelector('#'+allId).addEventListener('change',(e)=>{
+        if (isMultiCountry()){
+          e.target.checked = false; // çok ülkede All yok
+          return;
+        }
+        if (e.target.checked){
+          state.selectedSectors = new Set(sectors);
+        } else {
+          state.selectedSectors = new Set(['Tourism']);
+        }
+        syncSectorCheckboxUI();
+        applyFilters(); render();
+        if (state.activeTraces.size) ensureAnim();
+      });
+
+      DIM.sectors.forEach(s=>{
+        const id = 's_'+s.id;
+        const lab = document.createElement('label');
+        lab.dataset.key = s.id;
+        const chk = state.selectedSectors.has(s.id) ? 'checked' : '';
+        lab.innerHTML = `<input type="checkbox" id="${id}" ${chk}/> <span class="lbl">${sectorLabel(s.id)}</span>`;
+        box.appendChild(lab);
+
+        lab.querySelector('input').addEventListener('change', (e)=>{
+          const multi = isMultiCountry();
+          if (multi){
+            if (e.target.checked){
+              state.selectedSectors = new Set([s.id]);
+              DIM.sectors.forEach(o=>{
+                if (o.id!==s.id){
+                  const el2=document.getElementById('s_'+o.id);
+                  if (el2) el2.checked=false;
+                }
+              });
+            } else {
+              e.target.checked = true; // tek seçimi kapatma yok
+              return;
+            }
+          } else {
+            if (e.target.checked) state.selectedSectors.add(s.id);
+            else                  state.selectedSectors.delete(s.id);
+            if (state.selectedSectors.size===0) state.selectedSectors.add('Tourism');
+          }
+          syncSectorCheckboxUI();
+          applyFilters(); render();
+          if (state.activeTraces.size) ensureAnim();
+        });
+
+        lab.querySelector('.lbl').addEventListener('click',(e)=>{
+          e.preventDefault(); e.stopPropagation();
+          state.highlightSector = (state.highlightSector===s.id ? null : s.id);
+          state.highlightCountry = null;
+          updateHighlightsUI();
+          render();
+        });
+      });
+
+      enforceSelectionRules();
+    }
+    function syncSectorCheckboxUI(){
+      const multi = isMultiCountry();
+      const allEl = document.getElementById('sAll');
+      if (allEl){
+        if (multi){
+          allEl.checked = false; allEl.disabled = true;
+        } else {
+          allEl.disabled = false;
+          allEl.checked = (state.selectedSectors.size === sectors.length);
+        }
+      }
+      DIM.sectors.forEach(s=>{
+        const cb = document.getElementById('s_'+s.id);
+        if (cb) cb.checked = state.selectedSectors.has(s.id);
+      });
+    }
+    function enforceSelectionRules(){
+      const multi = isMultiCountry();
+      if (multi){
+        if (state.selectedSectors.size !== 1){
+          const keep = state.selectedSectors.has('Tourism')
+            ? 'Tourism'
+            : ([...state.selectedSectors][0] || 'Tourism');
+          state.selectedSectors = new Set([keep]);
+        }
+      } else {
+        if (state.selectedSectors.size === 0){
+          state.selectedSectors = new Set(['Tourism']);
+        }
+      }
+      syncSectorCheckboxUI();
+    }
+
+    // ---------- UI: Indicator ----------
+    function buildIndicatorChecks(){
+      const box = indicatorChecksEl;
+      box.innerHTML = '';
+
+      const allId = 'vAll';
+      const allLabel = document.createElement('label');
+      const allChecked = (state.selectedIndicators.size === variables.length);
+      allLabel.innerHTML = `<input type="checkbox" id="${allId}" ${allChecked?'checked':''}/> <span class="lbl">${I18N[L()].all}</span>`;
+      box.appendChild(allLabel);
+
+      box.querySelector('#'+allId).addEventListener('change',(e)=>{
+        if (e.target.checked){
+          state.selectedIndicators = new Set(variables);
+        } else {
+          state.selectedIndicators = new Set(['GDP']);
+        }
+        syncIndicatorCheckboxUI();
+        applyFilters(); render();
+        if (state.activeTraces.size) ensureAnim();
+      });
+
+      DIM.variables.forEach(v=>{
+        const id = 'v_'+v.id;
+        const lab = document.createElement('label');
+        const chk = state.selectedIndicators.has(v.id) ? 'checked' : '';
+        lab.innerHTML = `<input type="checkbox" id="${id}" ${chk}/> <span class="lbl">${variableLabel(v.id)}</span>`;
+        box.appendChild(lab);
+
+        lab.querySelector('input').addEventListener('change', (e)=>{
+          if (e.target.checked) state.selectedIndicators.add(v.id);
+          else                  state.selectedIndicators.delete(v.id);
+          if (state.selectedIndicators.size===0) state.selectedIndicators.add('GDP');
+          syncIndicatorCheckboxUI();
+          applyFilters(); render();
+          if (state.activeTraces.size) ensureAnim();
+        });
+      });
+
+      syncIndicatorCheckboxUI();
+    }
+    function syncIndicatorCheckboxUI(){
+      const allEl = document.getElementById('vAll');
+      if (allEl){
+        allEl.checked = (state.selectedIndicators.size === variables.length);
+      }
+      DIM.variables.forEach(v=>{
+        const cb = document.getElementById('v_'+v.id);
+        if (cb) cb.checked = state.selectedIndicators.has(v.id);
+      });
+    }
+
+    function updateHighlightsUI(){
+      countryChecks.querySelectorAll('label').forEach(x=>x.classList.remove('hl'));
+      if (state.highlightCountry){
+        const lab = countryChecks.querySelector(`label[data-key="${state.highlightCountry}"]`);
+        if (lab) lab.classList.add('hl');
+      }
+      sectorChecksEl.querySelectorAll('label').forEach(x=>x.classList.remove('hl'));
+      if (state.highlightSector){
+        const lab = sectorChecksEl.querySelector(`label[data-key="${state.highlightSector}"]`);
+        if (lab) lab.classList.add('hl');
+      }
+    }
+
+    // ---------- Render / Controls ----------
+    function render(){ clearCanvas(); drawZones(); drawAxes(); drawCornerBadges(); drawPoints(); }
+
+    function resetFilters(){
+      state.selectedCountries = new Set(countries);   // All countries
+      state.selectedSectors   = new Set(['Tourism']); // only Tourism
+      state.selectedIndicators= new Set(['GDP']);     // only GDP
+      // Trace'leri ayrı buton sıfırlıyor, burada dokunmuyoruz.
+      buildCountryChecks();
+      buildSectorChecks();
+      buildIndicatorChecks();
+      updateHighlightsUI();
+
+      tIndex=0; timeSlider.value=0;
+      applyFilters(); render();
+    }
+
+    function resetTraces(){
+      state.activeTraces.clear();
+      stopAnim();
+      render();
+    }
+
+    function tick(step=1){
+      tIndex=(tIndex+step+timeline.length)%timeline.length;
+      timeSlider.value=tIndex;
+      applyFilters(); render();
+      if (state.activeTraces.size) ensureAnim();
+    }
+
+    function drawZones(){
+      rectDataFill(0,3,0,3,'#93C572');
+      rectDataFill(0,3,-3,0,'#FFE600');
+      rectDataFill(-3,0,0,3,'#FF7A00');
+      rectDataFill(-3,0,-3,0,'#990000');
+    }
+
+    function updateModeBanner(mode){
+      const el = document.getElementById('footerNote');
+      if (!el) return;
+      if (mode === 'bySector'){
+        const picked = [...state.selectedSectors].map(sectorLabel).join(', ');
+        el.textContent = `Mode: Sector → Countries | ${picked} için ülkeler`;
+      } else if (mode === 'byCountry'){
+        const c = [...state.selectedCountries][0];
+        const hi = (state.selectedSectors.size === 1) ? ` • vurgulu: ${sectorLabel([...state.selectedSectors][0])}` : '';
+        el.textContent = `Mode: Country → Sectors | ${countryLabel(c)} için sektörler${hi}`;
+      } else {
+        el.textContent = 'Mode: — Lütfen ya tek bir ülke seçin ya da en az bir sektör işaretleyin.';
+      }
+    }
+
+    // ---------- Init ----------
+    document.addEventListener('DOMContentLoaded', ()=>{
+      selLang.value = L();
+      selLang.addEventListener('change', ()=>{ LANG = selLang.value; localStorage.setItem('saha_lang', LANG); applyLang(); });
+
+      populateControls();
+      applyFilters();
+      render();
+
+      btnReset.addEventListener('click', resetFilters);
+      btnResetTraces.addEventListener('click', resetTraces);
+      btnPlay .addEventListener('click', togglePlay);
+      btnPrev .addEventListener('click', ()=>tick(-1));
+      btnNext .addEventListener('click', ()=>tick(1));
+      timeSlider.addEventListener('input', (e)=>{
+        tIndex = parseInt(e.target.value,10) || 0;
+        applyFilters(); render();
+        if (state.activeTraces.size) ensureAnim();
+      });
+      canvas.addEventListener('mousemove', onMouseMove);
+      canvas.addEventListener('mouseleave', ()=>{ hover=null; hideTooltip(); render(); });
+      canvas.addEventListener('click', onCanvasClick);
+
+      applyLang();
+      setFooter();
+      window.addEventListener('resize', ()=>{ render(); });
+    });
+
+    function togglePlay(){
+      if (playTimer){ clearInterval(playTimer); playTimer=null; btnPlay.textContent=I18N[L()].play; return; }
+      btnPlay.textContent=I18N[L()].pause;
+      playTimer=setInterval(()=>tick(1),800);
+    }
+  </script>
+</body>
+</html>

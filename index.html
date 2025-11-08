@@ -3938,10 +3938,14 @@ document.getElementById('footerNote').textContent =
 let DATA = [];
 if (CSV){
   DATA = CSV.data;
-  // DIM'i CSV'den kur
-  DIM.countries = CSV.countries.map(id => ({ id, en:id, tr:id, ar:id }));
-  DIM.sectors   = CSV.sectors  .map(id => ({ id, en:id, tr:id, ar:id }));
-  DIM.variables = CSV.variables.map(id => ({ id, en:id, tr:id, ar:id }));
+
+  // Mevcut (EN/TR/AR) sözlükleri koruyarak CSV kimliklerini yerleştir
+  const mergeKeep = (baseArr, ids) =>
+    ids.map(id => baseArr.find(x => x.id === id) || { id, en:id, tr:id, ar:id });
+
+  DIM.countries = mergeKeep(DIM.countries, CSV.countries);
+  DIM.sectors   = mergeKeep(DIM.sectors,   CSV.sectors);
+  DIM.variables = mergeKeep(DIM.variables, CSV.variables);
 } else {
   // --- CSV yoksa, eski demo üretimini kullan (aylık random) ---
   const demoCountries = DIM.countries.map(x=>x.id);
@@ -4837,9 +4841,34 @@ document.getElementById('lblCountry').textContent = I18N[L()].country;
       state.highlightSector   = savedHS;
       state.activeTraces      = savedTraces;
 
-
+function syncMultiSelectEl(sel, selectedSet){
+  [...sel.options].forEach(o => { o.selected = selectedSet.has(o.value); });
+}
       setFooter(); updateTimeLabel(); updateEnds(); render();
  updateInfoPanel(); // <-- EKLE
+// --- Seçenekleri yeni dile göre tekrar oluştur ---
+const cSel = document.getElementById('countryMulti');
+const sSel = document.getElementById('sectorMulti');
+const vSel = document.getElementById('indicatorMulti');
+
+// Mevcut seçimleri koru
+const keepC = new Set(state.selectedCountries);
+const keepS = new Set(state.selectedSectors);
+const keepV = new Set(state.selectedIndicators);
+
+// Listeyi yeni label fonksiyonlarıyla yeniden doldur
+buildCountryMulti();
+buildSectorMulti();
+buildIndicatorMulti();
+
+// Seçimleri DOM tarafında geri yükle
+syncMultiSelectEl(cSel, keepC);
+syncMultiSelectEl(sSel, keepS);
+syncMultiSelectEl(vSel, keepV);
+
+// Filtreyi tetikle + çiz
+applyFilters();
+render();
     }
 
     

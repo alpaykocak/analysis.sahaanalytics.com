@@ -89,7 +89,7 @@
   .side-info .info-title{font-size:12px;color:var(--muted);margin-bottom:4px}
   .side-info .info-year{font-size:28px;font-weight:800;line-height:1.1}
   .side-info .info-zone{margin-top:6px;font-weight:700;color:#0f3a4a}
-  .side-info .info-meta{margin-top:8px;color:var(--muted);font-size:12px}
+  .side-info .info-meta{margin-top:8px;color:var(--muted);font-size:16px}
 
   /* Tooltip */
   .tooltip{
@@ -208,7 +208,17 @@
 
   <!-- ÜST KONTROLLER -->
   <div class="card">
-    <div class="controls">
+    <div class="controls" style="min-width:260px">
+      <div class="control actions-col">
+        <label class="small" id="lblLang">Language</label>
+        <select id="selLang">
+          <option value="en">English</option>
+          <option value="tr">Türkçe</option>
+          <option value="ar">العربية</option>
+        </select>
+        <button class="btn-wide" id="btnReset">Reset Filters</button>
+        <button class="btn-wide" id="btnTraceToggle">Trace On</button>
+      </div>
       <div class="control" style="min-width:260px">
         <label class="small" id="lblCountry">Country</label>
         <select id="countryMulti" multiple size="6" style="min-width:260px"></select>
@@ -221,18 +231,7 @@
 
       <div class="control" style="min-width:260px">
         <label class="small" id="lblIndicator">Indicator</label>
-        <select id="indicatorMulti" multiple size="6" style="min-width:260px"></select>
-      </div>
-
-      <div class="control actions-col">
-        <label class="small" id="lblLang">Language</label>
-        <select id="selLang">
-          <option value="en">English</option>
-          <option value="tr">Türkçe</option>
-          <option value="ar">العربية</option>
-        </select>
-        <button class="btn-wide" id="btnReset">Reset Filters</button>
-        <button class="btn-wide" id="btnTraceToggle">Trace On</button>
+        <select id="indicatorMulti" multiple size="3" style="min-width:220px"></select>
       </div>
     </div>
   </div>
@@ -3524,6 +3523,33 @@
 </script>
 
 <script>
+(function(){
+  function normLang(v){
+    if(!v) return "tr";
+    v = v.toLowerCase().replace("_","-");
+    if(v.startsWith("ar")) return "ar";
+    if(v.startsWith("en")) return "en";
+    if(v.startsWith("tr")) return "tr";
+    return "en";
+  }
+  function setInfoTitle(){
+    const el = document.querySelector('.info-title');
+    if(!el) return;
+    const raw  = document.getElementById('selLang')?.value || 'tr';
+    const lang = normLang(raw);
+    const TITLE = {
+      en: "Analyst Note",
+      tr: "Analist Notu",
+      ar: "مذكرة المحلل"
+    };
+    el.textContent = TITLE[lang] || "Analyst Note";
+    // RTL hiza
+    el.dir = (lang === 'ar' ? 'rtl' : 'ltr');
+    el.style.textAlign = (lang === 'ar' ? 'right' : 'left');
+  }
+  window.addEventListener('DOMContentLoaded', setInfoTitle);
+  document.getElementById('selLang')?.addEventListener('change', setInfoTitle);
+})();
     // ---------- i18n ----------
    const I18N = {
   en: {
@@ -3784,7 +3810,10 @@ function renderInfoPanelFromNarrativeI18N(){
   const elZone = document.getElementById('infZone');
   const elMeta = document.getElementById('infMeta');
   if (!elYear || !elZone || !elMeta) return;
-  elYear.textContent = String(title).replace(/^\D+:\s*/,''); // sadece yıl rakamı
+// "Yıl: 2013" / "Year: 2013" / "السنة: 2013"
+elYear.textContent = title;
+elYear.dir = (tLang()==='ar' ? 'rtl' : 'ltr');
+elYear.style.textAlign = (tLang()==='ar' ? 'right' : 'left');
   elZone.textContent = phase;
   elMeta.textContent = text;
 
@@ -4307,8 +4336,23 @@ function drawFlag(cx, cy, country, opts = {}){
       const w=Math.abs(cx2-cx1), h=Math.abs(cy2-cy1);
       ctx.fillStyle=color; ctx.fillRect(left,top,w,h);
     }
-    function getIconSize(){ return (window.innerWidth<=768)?48:56; }
+function getIconSize(){
+  const w = canvas?.width || 840;
 
+  if (w >= 1300) return 100;  // Çok geniş ekranlar (büyük sunumlar için)
+  if (w >= 1100) return 92;  // Önceki 72 idi
+  if (w >= 900)  return 84;  // Önceki 64 idi
+  if (w >= 700)  return 76;  // Önceki 56 idi
+  return 64;                 // Önceki 48 idi
+}
+function fontForSize(s){
+  if (s >= 108) return 'bold 18px Inter, sans-serif';
+  if (s >= 96) return 'bold 16px Inter, sans-serif';
+  if (s >= 84) return 'bold 14px Inter, sans-serif';
+  if (s >= 72) return 'bold 13px Inter, sans-serif';
+  if (s >= 64) return 'bold 12px Inter, sans-serif';
+  return 'bold 11px Inter, sans-serif';
+}
     function drawCornerIconAt(ix, iy, which, opts = {}){
       if (!ctx) return;
       ctx.save();
@@ -4317,7 +4361,7 @@ function drawFlag(cx, cy, country, opts = {}){
       const alpha = opts.alpha ?? 0.28;
       const stroke = opts.stroke ?? '#111827';
       const txtColor = opts.textColor ?? '#0f172a';
-      const txtFont  = opts.textFont ?? ((size <= 48) ? 'bold 11px sans-serif' : 'bold 12px sans-serif');
+const txtFont = opts.textFont ?? fontForSize(size); // ← eskisini bununla değiştir
       const showFrame = opts.frame ?? true;
       const labelText = opts.label ?? phaseLabel(which);  // <-- DÜZELTME
 
@@ -4925,6 +4969,223 @@ clearCanvas(); drawZones(); drawAxes(); drawCornerBadges();
   });
 drawPersistentLabels();
 }
-  </script>
+
+// === META PARAGRAFI — Akıcı, rapor üslubu (EN/TR/AR)
+// (Yalnızca META üretimini değiştirir. #infYear ve #infZone aynen çalışır.)
+
+// ---------- Küçük yardımcılar (dil, gösterge listesi, hız/ivme sözcükleri) ----------
+function _lang(){ return (L()==='ar'?'ar':(L()==='tr'?'tr':'en')); }
+
+function _indicatorsText(){
+  const lang=_lang();
+  const sel = document.getElementById('indicatorMulti');
+  let arr=[];
+  if (sel && sel.selectedOptions?.length){
+    arr = [...sel.selectedOptions].map(o=>o.textContent.trim()).filter(Boolean);
+  } else if (state?.selectedIndicators?.size){
+    arr = [...state.selectedIndicators].map(x=> (typeof indicatorLabel==='function'? indicatorLabel(x): x)).filter(Boolean);
+  }
+  const conj = (lang==='tr')?'ve':(lang==='ar')?'و':'and';
+  if(arr.length===0){
+    return (lang==='tr')?'Revenue, Cost ve Value Added'
+         : (lang==='ar')?'الإيرادات والتكاليف والقيمة المضافة'
+         : 'Revenue, Cost and Value Added';
+  }
+  if(arr.length===1) return arr[0];
+  return `${arr.slice(0,-1).join(', ')} ${conj} ${arr.at(-1)}`;
+}
+
+function _momWord(y){
+  const p = PHRASES[_lang()];
+  return p.momentum(y);
+}
+function _speedWord(v){
+  const p = PHRASES[_lang()];
+  return p.speed(v);
+}
+
+// Faz sayımları ve eşzamanlılık (cohesion) etiketi
+function _phaseCounts(){
+  if (!state.filtered?.length) return {what:0,where:0,how:0,who:0,total:0};
+  const cnt={what:0,where:0,how:0,who:0,total:0};
+  state.filtered.forEach(d=>{
+    const k = zoneKeyOf(d.x_value,d.y_value);
+    if (k in cnt) cnt[k]++;
+    cnt.total++;
+  });
+  return cnt;
+}
+function _cohesionLabel(cnt){
+  const lang=_lang();
+  const pos = (cnt.what||0)+(cnt.where||0);
+  const neg = (cnt.how||0) +(cnt.who||0);
+  const share = cnt.total ? Math.min(pos,neg)/cnt.total : 0;
+  // share≈0 → güçlü; 0.15–0.35 → sınırlı/partial; >0.35 → zayıf/weak
+  if(lang==='tr')  return share>0.35 ? "eşzamanlılık zayıf" : share>0.15 ? "eşzamanlılık sınırlı" : "eşzamanlılık güçlü";
+  if(lang==='ar')  return share>0.35 ? "ضعف في التزامن"   : share>0.15 ? "تزامن محدود"       : "تزامن قوي";
+  /* en */         return share>0.35 ? "weak synchronisation" : share>0.15 ? "partial synchronisation" : "strong synchronisation";
+}
+
+// Tohumlu (deterministik) küçük çeşitlilik: bağlaç/son cümle seçimi
+function _seedKey(y, selCountries, selSectors){
+  return `${_lang()}|${y}|${(selCountries||[]).join(',')}|${(selSectors||[]).join(',')}`;
+}
+function _hash(s){ let h=0; for(let i=0;i<s.length;i++){ h=((h<<5)-h)+s.charCodeAt(i); h|=0; } return Math.abs(h); }
+function _pick(arr, seed, salt){
+  if(!arr.length) return '';
+  const h = _hash(seed+'|'+salt);
+  return arr[h % arr.length];
+}
+
+// ---------- RAPOR METNİ oluşturucu ----------
+function buildNarrativeForPanelI18N(){
+  const lang = _lang();
+  const P = PHRASES[lang];
+  const y = currentTick().year;
+
+  if (!y || !state.filtered?.length) {
+    return { title: `${P.year}: ${y||'—'}`, phase:'—', text:'' };
+  }
+
+  // Seçimler
+  const selCountries=[...state.selectedCountries];
+  const selSectors=[...state.selectedSectors];
+  const singleC = selCountries.length===1;
+  const singleS = selSectors.length===1;
+  const Cname = singleC ? countryLabel(selCountries[0]) : null;
+  const Sname = singleS ? sectorLabel(selSectors[0])   : null;
+
+  // Özet (ülke-sektör bazında) + hız/ivme
+  const agg=new Map();
+  state.filtered.forEach(d=>{
+    const k=`${d.country}|${d.sector}`;
+    const v=agg.get(k)||{c:d.country,s:d.sector,n:0,sx:0,sy:0};
+    v.n++; v.sx+=(d.x_value??0); v.sy+=(d.y_value??0); agg.set(k,v);
+  });
+  const rows=[...agg.values()].map(v=>{
+    const x=v.sx/v.n, yv=v.sy/v.n, speed=Math.hypot(x,yv), score=x+yv;
+    return {country:v.c, sector:v.s, x, y:yv, speed, score};
+  }).sort((a,b)=>b.score-a.score);
+
+  const IND = _indicatorsText();
+  const theme = YEAR_THEMES[lang][y] || "";
+  const cnt = _phaseCounts();
+  const mixed = ((cnt.what+cnt.where)>0) && ((cnt.how+cnt.who)>0);
+
+  // Baskın faz
+  const domPhase = (function(){
+    const copy={what:cnt.what,where:cnt.where,how:cnt.how,who:cnt.who};
+    return Object.entries(copy).sort((a,b)=>b[1]-a[1])[0][0];
+  })();
+  const phaseTxt = PHASE_BLURB[lang][domPhase] || domPhase;
+
+  // Ortalama ivme/hız (çoklu seçimlerde ton için)
+  const avgY   = rows.length ? rows.reduce((s,r)=>s+r.y,0)/rows.length : 0;
+  const avgSpd = rows.length ? rows.reduce((s,r)=>s+r.speed,0)/rows.length : 0;
+
+  // Dil-özel bağlaçlar ve kapanışlar
+  const seed = _seedKey(y, selCountries, selSectors);
+  const TPLUS = (lang==='tr')? ["Buna paralel olarak", "Ayrıca", "Devamında"]
+              : (lang==='ar')? ["وبالتوازي مع ذلك", "كذلك", "إضافةً إلى ذلك"]
+              : /* en */       ["In parallel", "Additionally", "Moreover"];
+  const TCONC = (lang==='tr')? ["Genel tablo temkinli iyimserliğe işaret ediyor.",
+                                "Kısa vadede görünüm ihtiyatlı şekilde olumlu.",
+                                "Görünüm, temellerin kademeli güçlendiğine işaret ediyor."]
+              : (lang==='ar')? ["تشير الصورة العامة إلى تفاؤل حذر.",
+                                "على المدى القصير تبدو النظرة إيجابية بحذر.",
+                                "تشير المعطيات إلى ترسخ تدريجي للأساسيات."]
+              : /* en */       ["The overall picture points to cautious optimism.",
+                                "Near-term tone appears constructively biased.",
+                                "Signals suggest fundamentals are firming gradually."];
+  const plus  = _pick(TPLUS, seed, 'plus');
+  const concl = _pick(TCONC, seed, 'concl');
+
+  // Lider listeleri
+  const topCountries = rows.slice(0,3).map(r=>countryLabel(r.country)).join(' > ');
+  const topSectors   = (singleC? rows.filter(r=>r.country===selCountries[0]) : rows)
+                        .slice(0,3).map(r=>sectorLabel(r.sector)).join(' > ');
+  const combos = rows.slice(0,3).map(r=>`${countryLabel(r.country)}•${sectorLabel(r.sector)}`).join(' | ');
+
+  // Sözcükler
+  const momAvg = _momWord(avgY);
+  const spdAvg = _speedWord(avgSpd);
+  const cohesion = _cohesionLabel(cnt);
+
+  // --- AKICI/RAPORSEL PARAGRAF — Senaryolara göre metin ---
+  let text = "";
+
+  if (mixed && (!singleC || !singleS)){
+    // Karışık faz: iki cümle + kapanış
+    if (lang==='tr'){
+      text = `${theme? theme + " " : ""}${y} yılında sinyaller karışık bir görünüm sergiliyor. ${IND}, seçimler arasında farklı yönlere işaret ediyor; ` +
+             `bu da döngüde ${cohesion} olduğunu düşündürüyor. ${plus}, öne çıkan kümelenmeler ${combos}. ${concl}`;
+    } else if (lang==='ar'){
+      text = `${theme? theme + " " : ""}في ${y} تبدو الإشارات متباينة. تشير ${IND} إلى اتجاهات مختلفة بين الاختيارات، ` +
+             `وهو ما يوحي بوجود ${cohesion} في الدورة. ${plus}، التجمّعات البارزة ${combos}. ${concl}`;
+    } else {
+      text = `${theme? theme + " " : ""}In ${y}, signals are mixed. ${IND} diverge across selections, implying ${cohesion} of the cycle. ` +
+             `${plus}, notable clusters are ${combos}. ${concl}`;
+    }
+  }
+  else if (singleC && singleS){
+    const me = rows.find(r=>r.country===selCountries[0] && r.sector===selSectors[0]);
+    const mom = _momWord(me?.y ?? 0);
+    const spd = _speedWord(me?.speed ?? 0);
+    if (lang==='tr'){
+      text = `${theme? theme + " " : ""}${y} itibarıyla ${Cname} – ${Sname} görünümü ${mom} ve ${spd} seyirde. ` +
+             `${plus}, ${IND} sinyalleri bu tabloyu desteklerken baskın faz "${phaseTxt}". ${concl}`;
+    } else if (lang==='ar'){
+      text = `${theme? theme + " " : ""}حتى ${y}، يعكس قطاع ${Sname} في ${Cname} ${mom} وبوتيرة ${spd}. ` +
+             `${plus}، تؤكد إشارات ${IND} هذه الصورة بينما يشير الطور السائد "${phaseTxt}". ${concl}`;
+    } else {
+      text = `${theme? theme + " " : ""}As of ${y}, ${Sname} in ${Cname} shows ${mom} at a ${spd} pace. ` +
+             `${plus}, ${IND} signals corroborate the picture with the prevailing phase "${phaseTxt}". ${concl}`;
+    }
+  }
+  else if (!singleC && singleS){
+    if (lang==='tr'){
+      text = `${theme? theme + " " : ""}${y} yılında ${Sname} için ülkeler geneline bakıldığında tablo ${momAvg} ve ${spdAvg}. ` +
+             `${plus}, lider pazarlar: ${topCountries}. Genel faz "${phaseTxt}", ${cohesion}. ${concl}`;
+    } else if (lang==='ar'){
+      text = `${theme? theme + " " : ""}في ${y}، على مستوى البلدان لقطاع ${Sname} تبدو الصورة ${momAvg} وبوتيرة ${spdAvg}. ` +
+             `${plus}، الأسواق القيادية: ${topCountries}. الطور السائد "${phaseTxt}"، ${cohesion}. ${concl}`;
+    } else {
+      text = `${theme? theme + " " : ""}In ${y}, across countries for ${Sname} the picture is ${momAvg} at a ${spdAvg} pace. ` +
+             `${plus}, leading markets: ${topCountries}. Prevailing phase "${phaseTxt}", ${cohesion}. ${concl}`;
+    }
+  }
+  else if (singleC && !singleS){
+    if (lang==='tr'){
+      text = `${theme? theme + " " : ""}${y} yılında ${Cname} özelinde seçili sektörler ${momAvg} yönde ve ${spdAvg} hızda ilerliyor. ` +
+             `${plus}, öne çıkan alanlar: ${topSectors}. Genel faz "${phaseTxt}", ${cohesion}. ${concl}`;
+    } else if (lang==='ar'){
+      text = `${theme? theme + " " : ""}في ${y} داخل ${Cname} تتحرك القطاعات المختارة نحو ${momAvg} وبوتيرة ${spdAvg}. ` +
+             `${plus}، المجالات البارزة: ${topSectors}. الطور السائد "${phaseTxt}"، ${cohesion}. ${concl}`;
+    } else {
+      text = `${theme? theme + " " : ""}In ${y}, within ${Cname} the selected sectors move with ${momAvg} and a ${spdAvg} pace. ` +
+             `${plus}, stand-out areas: ${topSectors}. Prevailing phase "${phaseTxt}", ${cohesion}. ${concl}`;
+    }
+  }
+  else {
+    // Çoklu ülke + çoklu sektör
+    if (lang==='tr'){
+      text = `${theme? theme + " " : ""}${y} genelinde tablo ${momAvg} ve ${spdAvg}. ` +
+             `${plus}, ${IND} göstergeleri ülke ve sektörler boyu güçlenen bir aktiviteye işaret ediyor. ` +
+             `Öne çıkan kombinasyonlar: ${combos}. Genel faz "${phaseTxt}", ${cohesion}. ${concl}`;
+    } else if (lang==='ar'){
+      text = `${theme? theme + " " : ""}على امتداد ${y} تبدو الصورة الإجمالية ${momAvg} وبوتيرة ${spdAvg}. ` +
+             `${plus}، تشير ${IND} إلى نشاط آخذ في التحسّن عبر البلدان والقطاعات. ` +
+             `أفضل التركيبات: ${combos}. الطور السائد "${phaseTxt}"، ${cohesion}. ${concl}`;
+    } else {
+      text = `${theme? theme + " " : ""}For ${y}, the aggregate picture is ${momAvg} at a ${spdAvg} pace. ` +
+             `${plus}, ${IND} point to strengthening activity across countries and sectors. ` +
+             `Top combinations: ${combos}. Prevailing phase "${phaseTxt}", ${cohesion}. ${concl}`;
+    }
+  }
+
+  return { title: `${P.year}: ${y}`, phase: phaseTxt, text };
+}
+
+</script>
 </body>
 </html>

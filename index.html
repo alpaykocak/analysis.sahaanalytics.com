@@ -3550,11 +3550,30 @@
   window.addEventListener('DOMContentLoaded', setInfoTitle);
   document.getElementById('selLang')?.addEventListener('change', setInfoTitle);
 })();
+// ---- Auto language by country/locale (TR → tr, SA/AE → ar, aksi → en) ----
+function detectDefaultLang(){
+  const saved = localStorage.getItem('saha_lang');
+  if (saved) return saved;
+
+  const nav = (navigator.languages && navigator.languages[0]) || navigator.language || '';
+  const norm = normLang(nav); // 'en' | 'tr' | 'ar'
+  const region = (nav.split('-')[1] || '').toUpperCase();
+
+  // Bölge tabanlı Arapça ülkeler
+  const AR_REGIONS = new Set([
+    'SA','AE','BH','KW','QA','OM','IQ','JO','LB','EG','MA','DZ','TN','LY',
+    'SD','YE','SY','PS','MR','SO'
+  ]);
+
+  if (region === 'TR') return 'tr';
+  if (AR_REGIONS.has(region)) return 'ar';
+  return norm; // 'ar' ya da 'tr' ile başlayan dil kodlarını da kapsar, yoksa 'en'
+}
     // ---------- i18n ----------
    const I18N = {
   en: {
     footer:"© SAHA Analytics 2025. All rights reserved.", title:"Manufacturing Radar",
-    description:"Visualize how economic indicators move over time for different countries and sectors. The radar shows position and momentum — click a point to trace its last two periods of change.",
+    description:"How to use — ① Pick countries, sector and indicator from the filters. ② Move the year with the timeline slider or press ▶ to animate. ③ Use the legend to show/hide variables; Reset clears filters.",
     country:"Country", sector:"Sector", indicator:"Indicator",
     reset:"Reset Filters", resetTraces:"Reset Trace Lines", langLabel:"Language", shownPoints:"Shown points:",
     play:"▶", pause:"⏸",
@@ -3567,7 +3586,7 @@
   },
   tr: {
     footer:"© SAHA Analytics 2025. Tüm hakları saklıdır.", title:"İmalat Radarı",
-    description:"Ülkeler ve sektörler bazında ekonomik göstergelerin zaman içindeki hareketini görselleştirin. Radar, konum ve ivmeyi gösterir — bir noktaya tıklayarak son iki dönemdeki değişimini izleyin.",
+    description:"Nasıl kullanılır — ① Ülke, sektör ve göstergeyi filtrelerden seç. ② Zaman çubuğunu sürükle ya da ▶ ile oynat. ③ Legend ile değişkenleri göster/gizle; Reset tümünü sıfırlar.",
 
     country:"Ülke", sector:"Sektör", indicator:"Gösterge",
     reset:"Filtreleri Sıfırla", resetTraces:"İz Çizgilerini Sıfırla", langLabel:"Dil", shownPoints:"Gösterilen nokta:",
@@ -3582,7 +3601,7 @@ legendOff:"Etiketleri Kapat"
   },
   ar: {
     footer:"© SAHA Analytics 2025. جميع الحقوق محفوظة.", title:"رادار التصنيع",
-    description:"تَصوّر كيف تتحرك المؤشرات الاقتصادية مع مرور الوقت بين الدول والقطاعات. يوضح الرادار الموقع والزخم — انقر على أي نقطة لتتبع آخر فترتين من التغير.",
+    description: "طريقة الاستخدام — ① اختر الدول والقطاع والمؤشر من المرشّحات. ② حرّك شريط الزمن أو اضغط ▶ للتشغيل. ③استخدم القائمة لإظهار/إخفاء المتغيّرات؛ Reset يمسح المرشّحات." ,
     country:"الدولة", sector:"القطاع", indicator:"المؤشر",
     reset:"إعادة التصفية", resetTraces:"إعادة تعيين خطوط التتبع", langLabel:"اللغة", shownPoints:"عدد النقاط المعروضة:",
     play:"▶", pause:"⏸",
@@ -3594,7 +3613,7 @@ legendOff:"Etiketleri Kapat"
 legendOn:"تشغيل الوسوم", legendOff:"إيقاف الوسوم"
   }
 };
-    let LANG = localStorage.getItem('saha_lang') || 'en';
+    let LANG = detectDefaultLang();
     const L = () => (LANG==='ar'?'ar':LANG==='tr'?'tr':'en');
 
     // ---------- Dimensions ----------
@@ -4125,33 +4144,56 @@ function buildIndicatorMulti(){
 // İlk tIndex: mevcut yıla en yakın (varsa aynı yıl)
 function setInitialTickToCurrent(){
   if (!timeline.length) return;
- // GARANTİ: veri olan ilk yılla başla
-  tIndex = 0;
+  const want = 2025;
+  const idx = timeline.findIndex(t => Number(t.year) === want);
+  tIndex = idx >= 0 ? idx : (timeline.length - 1);
   timeSlider.value = String(tIndex);
 }
 
-    function populateControls(){
-	buildCountryMulti();
-	buildSectorMulti();
-	buildIndicatorMulti();
-      buildTimeline();
-      timeSlider.min=0; timeSlider.max=Math.max(0,timeline.length-1);
-      setInitialTickToCurrent();
-	 // Açılış: World, Machinery & Transport, Value Added
-	const cSel = document.getElementById('countryMulti');
-	const sSel = document.getElementById('sectorMulti');
-	const vSel = document.getElementById('indicatorMulti');
-	[...cSel.options].forEach(o => o.selected = (o.value === 'World'));
-	[...sSel.options].forEach(o => o.selected = (o.value === 'Machinery & Transport'));
-	[...vSel.options].forEach(o => o.selected = (o.value === 'Value Added'));
-	// State’i bu seçimlerden üret
-	state.selectedCountries = new Set([...cSel.selectedOptions].map(o=>o.value));
-	state.selectedSectors   = new Set([...sSel.selectedOptions].map(o=>o.value));
-	state.selectedIndicators= new Set([...vSel.selectedOptions].map(o=>o.value));
+function populateControls(){
+  buildCountryMulti();
+  buildSectorMulti();
+  buildIndicatorMulti();
 
-      updateTimeLabel(); updateInfoPanel(); // <-- EKLE 
-updateEnds();
-    }
+  // Zaman çizgisi + son yıl
+  buildTimeline();
+  timeSlider.min = 0;
+  timeSlider.max = Math.max(0, timeline.length - 1);
+  setInitialTickToCurrent(); // tIndex’i SON YILA koyar (aşağıdaki fonksiyonla birlikte)
+
+  // --- Açılış defaultları ---
+  const DEFAULT_COUNTRIES = [
+    'United States', 'China', 'Saudi Arabia', 'United Arab Emirates'
+  ];
+  const DEFAULT_SECTORS = ['Chemicals & Materials'];
+  const DEFAULT_VARS    = ['Value Added'];
+
+  const cSel = document.getElementById('countryMulti');
+  const sSel = document.getElementById('sectorMulti');
+  const vSel = document.getElementById('indicatorMulti');
+
+  // Yalnız mevcut seçenekleri işaretle
+  function selectWanted(sel, wanted){
+    const have = new Set([...sel.options].map(o => o.value));
+    [...sel.options].forEach(o => {
+      o.selected = wanted.includes(o.value) && have.has(o.value);
+    });
+    return wanted.filter(v => have.has(v));
+  }
+
+  const selC = selectWanted(cSel, DEFAULT_COUNTRIES);
+  const selS = selectWanted(sSel, DEFAULT_SECTORS);
+  const selV = selectWanted(vSel, DEFAULT_VARS);
+
+  // State'i güncelle (fallback: ilk mevcut seçenek)
+  state.selectedCountries  = new Set(selC.length ? selC : [countries[0]]);
+  state.selectedSectors    = new Set(selS.length ? selS : [sectors[0]]);
+  state.selectedIndicators = new Set(selV.length ? selV : [variables[0]]);
+
+  updateTimeLabel();
+  updateInfoPanel();
+  updateEnds();
+}
 
 function xyFor(d, yearIndex){
   const y = timeline[yearIndex]?.year;
@@ -4808,21 +4850,38 @@ document.getElementById('lblCountry').textContent = I18N[L()].country;
     // ---------- Render / Controls ----------
     function render(){ clearCanvas(); drawZones(); drawAxes(); drawCornerBadges(); drawPoints(); drawPersistentLabels(); }
 
-   function resetFilters(){
-
+function resetFilters(){
   const cSel = document.getElementById('countryMulti');
   const sSel = document.getElementById('sectorMulti');
   const vSel = document.getElementById('indicatorMulti');
-  // Defaults: World / Machinery & Transport / Value Added
-  [...cSel.options].forEach(o => o.selected = (o.value === 'World'));
-  [...sSel.options].forEach(o => o.selected = (o.value === 'Machinery & Transport'));
-  [...vSel.options].forEach(o => o.selected = (o.value === 'Value Added'));
-  state.selectedCountries = new Set(['World']);
-  state.selectedSectors   = new Set(['Machinery & Transport']);
-  state.selectedIndicators= new Set(['Value Added']);
-  tIndex=0; timeSlider.value=0;
-  applyFilters(); 
-render();
+
+  const DEFAULT_COUNTRIES = [
+    'United States', 'China', 'Saudi Arabia', 'United Arab Emirates'
+  ];
+  const DEFAULT_SECTORS = ['Chemicals & Materials'];
+  const DEFAULT_VARS    = ['Value Added'];
+
+  function selectWanted(sel, wanted){
+    const have = new Set([...sel.options].map(o=>o.value));
+    [...sel.options].forEach(o => o.selected = wanted.includes(o.value) && have.has(o.value));
+    return wanted.filter(v => have.has(v));
+  }
+
+  const selC = selectWanted(cSel, DEFAULT_COUNTRIES);
+  const selS = selectWanted(sSel, DEFAULT_SECTORS);
+  const selV = selectWanted(vSel, DEFAULT_VARS);
+
+  state.selectedCountries = new Set(selC.length ? selC : [countries[0]]);
+  state.selectedSectors   = new Set(selS.length ? selS : [sectors[0]]);
+  state.selectedIndicators= new Set(selV.length ? selV : [variables[0]]);
+
+  // Yılı son yıla çek
+  tIndex = Math.max(0, timeline.length - 1);
+  timeSlider.value = String(tIndex);
+
+  // Uygula ve çiz
+  applyFilters();
+  render();
 }
 
     function resetTraces(){

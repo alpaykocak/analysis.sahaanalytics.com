@@ -4025,7 +4025,7 @@ const transition = {
     const tooltipEl  = document.getElementById('tooltip');
 
     // ---------- Timeline / Animation ----------
-    const TRAIL_LENGTH = 2;  // kaç dönemlik iz çizilsin? (2 = mevcut + 1 önceki)
+    const TRAIL_LENGTH = 3;  // kaç dönemlik iz çizilsin? (2 = mevcut + 1 önceki)
     let timeline=[]; 
 let tIndex=0;
 
@@ -4062,8 +4062,15 @@ const currentPositions = new Map();        // key -> {cx, cy}
     const parseKey = k => { const [country,sector,variable]=k.split('|'); return {country,sector,variable}; };
 
     // ---------- Colors ----------
-    const VAR_COLORS = { 'Cost':'#1f77b4', 'Revenue':'#ff7f0e', 'Value Added':'#2ca02c' };
-    function hashStr(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+    // ---------- Colors ----------
+   // ---------- Colors ----------
+const VAR_COLORS = { 'Cost':'#1f77b4', 'Revenue':'#ff7f0e', 'Value Added':'#2ca02c' };
+const TRANSITION_LINE_COLOR = '#ffffff';           // geçiş çizgisi rengi
+const TRANSITION_LINE_WIDTH = { base: 3.2, hl: 4.4 }; // kalınlık: normal / highlight
+const TAIL_LINE_COLOR       = '#ffffff';           // kuyruk (arka 2 dönem) rengi
+const TAIL_LINE_WIDTH       = { back1: 3.2, back2: 4.4 }; // kuyruk kalınlıkları
+    function hashStr(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i);             
+    h=Math.imul(h,16777619); } return h>>>0; }
     function colorForPair(country, sector){
       const key=`${country}|${sector}`;
       const h = hashStr(key);
@@ -4349,6 +4356,7 @@ function updateInfoPanelLegacy(){
     elMeta.textContent = '';
   }
 }
+
 function drawFlag(cx, cy, country, opts = {}){
   const size = opts.size || 22;              // bayrak "font" boyutu
   const outline = opts.outline !== false;    // kontrast halkası
@@ -4372,7 +4380,105 @@ function drawFlag(cx, cy, country, opts = {}){
   ctx.fillText(emoji, cx, cy);
   ctx.restore();
 }
+
+
+// —— SEKTÖR & GÖSTERGE ROZETLERİ + BİLEŞİK İKON ——
+
+// Sektör kısa etiket ve renkleri (istersen değiştir)
+const SECTOR_STYLE = {
+  "Chemicals & Materials":   { abbr:"CM", color:"#2563eb" },
+  "Food & Consumer Goods":   { abbr:"FG", color:"#16a34a" },
+  "Machinery & Transport":   { abbr:"MT", color:"#d97706" },
+  "Metals & Heavy Industry": { abbr:"MH", color:"#7c3aed" },
+  "Other Manufacturing":     { abbr:"OM", color:"#0ea5e9" }
+};
+
+// Basit yuvarlatılmış dikdörtgen
+function _roundRectPath(x, y, w, h, r){
+  const rr = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr, y);
+  ctx.arcTo(x+w, y,   x+w, y+h, rr);
+  ctx.arcTo(x+w, y+h, x,   y+h, rr);
+  ctx.arcTo(x,   y+h, x,   y,   rr);
+  ctx.arcTo(x,   y,   x+w, y,   rr);
+  ctx.closePath();
+}
+
+function drawSectorBadge(cx, cy, size, sector){
+  const st = SECTOR_STYLE[sector] || {abbr:"SE", color:"#64748b"};
+  const w = size, h = size*0.78;   // yatay rozet
+  const x = cx - w/2, y = cy - h/2;
+  // arka planda beyaz plaka
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  _roundRectPath(x, y, w, h, Math.max(6, size*0.18)); ctx.fillStyle = "#ffffff"; ctx.fill();
+  // renk şeridi
+  _roundRectPath(x, y, w, h, Math.max(6, size*0.18)); ctx.strokeStyle = st.color; ctx.lineWidth = Math.max(2, size*0.12); ctx.stroke();
+  // metin
+  ctx.fillStyle = st.color;
+  ctx.font = `700 ${Math.round(size*0.42)}px Inter, system-ui, sans-serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(st.abbr, cx, cy);
+  ctx.restore();
+}
+
+function drawVarBadge(cx, cy, size, variable){
+  const col = VAR_COLORS[variable] || "#111827";
+  const glyph = (variable==="Cost") ? "↓" : (variable==="Revenue") ? "↑" : "VA";
+  const r = size*0.42;
+  ctx.save();
+  // beyaz zemin + renkli kontur
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.fillStyle = "#ffffff"; ctx.fill();
+  ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, size*0.10); ctx.stroke();
+  // metin
+  ctx.fillStyle = col;
+  ctx.font = `700 ${Math.round(size*0.46)}px Inter, system-ui, sans-serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(glyph, cx, cy);
+  ctx.restore();
+}
+
+// Seçim durumuna göre bileşik ikon oluşturur (bayrak + opsiyonel sektör + opsiyonel gösterge)
+function drawCompositeIcon(cx, cy, d, opts = {}){
+  const S = opts.size || getIconSize();
+  const wantSector = state.selectedSectors.size    > 1;
+  const wantVar    = state.selectedIndicators.size > 1;
+
+  // Parçalar sırası: her zaman ülke bayrağı, ardından varsa sektör, ardından varsa gösterge
+  const parts = ["flag"].concat(wantSector ? ["sector"] : []).concat(wantVar ? ["var"] : []);
+  const n = parts.length;
+
+  // toplam genişliği tekli ikon boyutunu aşmayacak şekilde her parçayı ölçekle
+  const gap = Math.max(4, Math.round(S * 0.08));
+  const piece = (n===1) ? S : (n===2) ? Math.round(S * 0.56) : Math.round(S * 0.38);
+  const totalW = n*piece + (n-1)*gap;
+  let x = cx - totalW/2 + piece/2;
+
+  // Hafif beyaz halo (kompoziti tek logo gibi okutsun)
+  ctx.save();
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = "transparent";
+  ctx.beginPath(); ctx.ellipse(cx, cy+1, totalW*0.55, S*0.46, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Parçaları sırayla çiz
+  parts.forEach(kind=>{
+    if (kind==="flag")      drawFlag(x, cy, d.country, { size: piece, outline:false });
+    else if (kind==="sector") drawSectorBadge(x, cy, piece, d.sector);
+    else if (kind==="var")    drawVarBadge(x, cy, piece, d.variable);
+    x += piece + gap;
+  });
+
+  // Etkileşim (hover/klik) yarıçapı tahmini
+  const hitR = Math.max(14, Math.round(Math.max(totalW, S) * 0.45));
+  return { hitR, totalW, piece };
+}
+
+
     const margin={left:60,right:20,top:20,bottom:50};
+
     function toCanvasX(x){ const w=canvas.width-margin.left-margin.right; return margin.left+((x+3)/6)*w; }
     function toCanvasY(y){ const h=canvas.height-margin.top-margin.bottom; return margin.top+((3-y)/6)*h; }
     function rectDataFill(x1,x2,y1,y2,color){
@@ -4382,6 +4488,8 @@ function drawFlag(cx, cy, country, opts = {}){
       const w=Math.abs(cx2-cx1), h=Math.abs(cy2-cy1);
       ctx.fillStyle=color; ctx.fillRect(left,top,w,h);
     }
+
+
 function getIconSize(){
   const w = canvas?.width || 840;
 
@@ -4543,6 +4651,7 @@ function cornerLabelFont(size, scale = 1.35) {
     }
 
     // --------- Points & Trails ---------
+// --------- Points & Trails ---------
 function drawPoints(){
   renderDots.length = 0;
 
@@ -4557,17 +4666,19 @@ function drawPoints(){
       const isHl = (state.highlightCountry && d.country===state.highlightCountry) ||
                    (state.highlightSector  && d.sector===state.highlightSector) ||
                    selected;
-      const flagSize = 64 + (hoverMatch(d)?2:0) + (isHl?2:0);
-currentPositions.set(traceKey(d), { cx, cy });
-      // (İsteğe bağlı) küçük vurgu için alpha — bayrağı etkilemesin diye sadece halo’da kullanıyoruz
+
+      // vurguda +2px büyütme refleksi kalsın
+      const base = getIconSize();
+      const flagSize = base + (hoverMatch(d)?2:0) + (isHl?2:0);
+
+      currentPositions.set(traceKey(d), { cx, cy });
       ctx.globalAlpha = isHl ? 1 : 0.98;
 
-      // Bayrağı çiz
-      drawFlag(cx, cy, d.country, { size: flagSize, outline: false });
+      // TEK çağrı: bileşik ikon
+      const meta = drawCompositeIcon(cx, cy, d, { size: flagSize });
 
-      // Hover/klik çarpışma yarıçapı
-      const rEff = Math.max(14, Math.round(flagSize * 0.6));
-      renderDots.push({ cx, cy, r: rEff, d, color: col });
+      // Hover/klik çarpışma
+      renderDots.push({ cx, cy, r: meta.hitR, d, color: col });
     });
   });
 
@@ -4696,7 +4807,7 @@ function drawActiveTraces(){
     const phase   = snakePhase * 0.15;
     const wobble  = wobblePath(smooth, /*amp*/4, /*cycles*/1.6, phase);
 
-    const baseColor = colorForPair(country, sector);
+    const baseColor = "#ffffff";
     const isHl      = (state.highlightCountry===country) || (state.highlightSector===sector);
 
     // (Opsiyonel) çok hafif düz “gölge”
@@ -5000,10 +5111,10 @@ vSel.addEventListener('change', ()=>{ state.selectedIndicators= readMulti(vSel);
   }
 }
 function renderInterpolated(tt){
-clearCanvas(); drawZones(); drawAxes(); drawCornerBadges();
+  clearCanvas(); drawZones(); drawAxes(); drawCornerBadges();
   renderDots.length = 0;
 
-  // Gruplama: değişken (indicator) bazında renk zaten VAR_COLORS ile
+  // Gruplama: gösterge bazında
   const grouped = {};
   state.filtered.forEach(d=>{
     const k = keyOf(d);
@@ -5019,7 +5130,7 @@ clearCanvas(); drawZones(); drawAxes(); drawCornerBadges();
       const e = transition.endMap.get(k);
       if (!s || !e) return;
 
-      // LERP (easing uygulanmış ilerleme)
+      // LERP
       const x  = lerp(s.x, e.x, tt);
       const y  = lerp(s.y, e.y, tt);
 
@@ -5029,30 +5140,22 @@ clearCanvas(); drawZones(); drawAxes(); drawCornerBadges();
                    (state.highlightSector  && d.sector===state.highlightSector) ||
                    selected;
 
-	const flagSize = 64; // sabit, hiç değişmesin
-      // --- Patika (kıvrımlı) ---
-      // Başlangıç/bitiş tuval koordinatlarına dönüştür
+      // Kıvrımlı patika
       const sx = toCanvasX(s.x), sy = toCanvasY(s.y);
       const ex = toCanvasX(e.x), ey = toCanvasY(e.y);
-      // Kontrol noktası: start->end vektörüne dik hafif bir sapma (yılan-kıvrımı)
       const vx = ex - sx, vy = ey - sy;
       const len = Math.hypot(vx, vy) || 1;
-      // dik vektör (normalize): (-vy, vx)
       const nx = -vy/len, ny = vx/len;
-      const bulge = Math.min(22, len*0.18); // sapma miktarı (piksel)
+      const bulge = Math.min(22, len*0.18);
       const cxp = lerp(sx, ex, 0.5) + nx * bulge;
       const cyp = lerp(sy, ey, 0.5) + ny * bulge;
 
       ctx.save();
       ctx.globalAlpha = 0.32;
-      ctx.lineWidth = isHl ? 2.6 : 2.0;
-      ctx.strokeStyle = colorForPair(d.country, d.sector);
+      ctx.lineWidth = isHl ? TRANSITION_LINE_WIDTH.hl : TRANSITION_LINE_WIDTH.base;      
+      ctx.strokeStyle = TRANSITION_LINE_COLOR;
       ctx.beginPath();
       ctx.moveTo(sx, sy);
-      // Quadratic Bezier: start -> control -> end(progress)
-      // İleri doğru "kadar" çizelim: tt oranında
-      // parametreyle kesmek için ufak helper
-      // (yaklaştırma: Bezier noktaları örnekleyip çiziyoruz)
       const samples = 28;
       for (let i=1;i<=Math.floor(samples*tt);i++){
         const t = i/samples;
@@ -5063,18 +5166,18 @@ clearCanvas(); drawZones(); drawAxes(); drawCornerBadges();
       ctx.stroke();
       ctx.restore();
 
-      // --- Bayrağı ara konuma bas ---
-      drawFlag(cx, cy, d.country, { size: flagSize, outline: false });
+      // Bileşik ikon (tek çağrı)
+      const iconSize = getIconSize();
+      const meta = drawCompositeIcon(cx, cy, d, { size: iconSize });
 
-      // Hover/klik çarpışması
-      const rEff = Math.max(14, Math.round(flagSize*0.6));
-      renderDots.push({ cx, cy, r: rEff, d, color: col });
-      currentPositions.set(k, { cx, cy }); // interpolasyon sırasında da güncel konumu yaz
+      // Hit / konum
+      renderDots.push({ cx, cy, r: meta.hitR, d, color: col });
+      currentPositions.set(k, { cx, cy });
     });
   });
-drawPersistentLabels();
-}
 
+  drawPersistentLabels();
+}
 // === META PARAGRAFI — Akıcı, rapor üslubu (EN/TR/AR)
 // (Yalnızca META üretimini değiştirir. #infYear ve #infZone aynen çalışır.)
 

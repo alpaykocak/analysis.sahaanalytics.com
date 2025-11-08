@@ -3524,14 +3524,6 @@
 
 <script>
 (function(){
-  function normLang(v){
-    if(!v) return "tr";
-    v = v.toLowerCase().replace("_","-");
-    if(v.startsWith("ar")) return "ar";
-    if(v.startsWith("en")) return "en";
-    if(v.startsWith("tr")) return "tr";
-    return "en";
-  }
   function setInfoTitle(){
     const el = document.querySelector('.info-title');
     if(!el) return;
@@ -3550,6 +3542,14 @@
   window.addEventListener('DOMContentLoaded', setInfoTitle);
   document.getElementById('selLang')?.addEventListener('change', setInfoTitle);
 })();
+function normLang(v){
+    if(!v) return "tr";
+    v = v.toLowerCase().replace("_","-");
+    if(v.startsWith("ar")) return "ar";
+    if(v.startsWith("en")) return "en";
+    if(v.startsWith("tr")) return "tr";
+    return "en";
+  }
 // ---- Auto language by country/locale (TR → tr, SA/AE → ar, aksi → en) ----
 function detectDefaultLang(){
   const saved = localStorage.getItem('saha_lang');

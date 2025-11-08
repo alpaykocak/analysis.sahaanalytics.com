@@ -3579,7 +3579,7 @@ function detectDefaultLang(){
     play:"▶", pause:"⏸",
     monthsShort:{Jan:"Jan",Feb:"Feb",Mar:"Mar",Apr:"Apr",May:"May",Jun:"Jun",Jul:"Jul",Aug:"Aug",Sep:"Sep",Oct:"Oct",Nov:"Nov",Dec:"Dec"},
     monthsFull:{Jan:"January",Feb:"February",Mar:"March",Apr:"April",May:"May",Jun:"June",Jul:"July",Aug:"August",Sep:"September",Oct:"October",Nov:"November",Dec:"December"},
-    phases:{what:"Expansion",where:"Recovery",how:"Slowdown",who:"Recession"},
+    phases:{what:"Expansion",where:"Recovery",how:"Slowdown",who:"Contraction"},
     varLabels:{ "Cost":"Cost", "Revenue":"Revenue", "Value Added":"Value Added" },
     all:"All" ,
 	legendOn:"Legend On", legendOff:"Legend Off"
@@ -3607,7 +3607,7 @@ legendOff:"Etiketleri Kapat"
     play:"▶", pause:"⏸",
     monthsShort:{Jan:"ينا",Feb:"فبر",Mar:"مار",Apr:"أبر",May:"ماي",Jun:"يون",Jul:"يول",Aug:"أغس",Sep:"سبت",Oct:"أكت",Nov:"نوف",Dec:"ديس"},
     monthsFull:{Jan:"يناير",Feb:"فبراير",Mar:"مارس",Apr:"أبريل",May:"مايو",Jun:"يونيو",Jul:"يوليو",Aug:"أغسطس",Sep:"سبتمبر",Oct:"أكتوبر",Nov:"نوفمبر",Dec:"ديسمبر"},
-    phases:{what:"التوسع",where:"التعافي",how:"التباطؤ",who:"الركود"},
+    phases:{what:"التوسع",where:"التعافي",how:"التباطؤ",who:"انكماش"},
     varLabels:{ "Cost":"التكلفة", "Revenue":"الإيرادات", "Value Added":"القيمة المضافة" },
     all:"الكل", 
 legendOn:"تشغيل الوسوم", legendOff:"إيقاف الوسوم"
@@ -3708,7 +3708,7 @@ const PHASE_BLURB = {
   en:{what:"Expansion: product/VA focus strengthening",
       where:"Recovery: demand returning",
       how:"Slowdown: efficiency & cost tuning",
-      who:"Recession risk: demand & capacity under pressure"},
+      who:"Contraction risk: demand & capacity under pressure"},
   tr:{what:"Genişleme: ürün/katma değer odağı güçleniyor",
       where:"Toparlanma: talep geri geliyor",
       how:"Yavaşlama: verimlilik ve maliyet ayarı",
@@ -3716,7 +3716,7 @@ const PHASE_BLURB = {
   ar:{what:"توسع: تركيز أقوى على المنتج والقيمة المضافة",
       where:"تعافٍ: عودة الطلب",
       how:"تباطؤ: ضبط الكفاءة والتكاليف",
-      who:"ركود محتمل: ضغط على الطلب والطاقة"}
+      who:"انكماش محتمل: ضغط على الطلب والطاقة"}
 };
 
 // Cümle şablonları
@@ -4875,9 +4875,12 @@ function resetFilters(){
   state.selectedSectors   = new Set(selS.length ? selS : [sectors[0]]);
   state.selectedIndicators= new Set(selV.length ? selV : [variables[0]]);
 
-  // Yılı son yıla çek
-  tIndex = Math.max(0, timeline.length - 1);
+  // Yılı 2025'e çek (yoksa son yıla)
+  const wantYear = 2025;
+  const idx = timeline.findIndex(t => Number(t.year) === wantYear);
+  tIndex = idx >= 0 ? idx : Math.max(0, timeline.length - 1);
   timeSlider.value = String(tIndex);
+  updateTimeLabel(); updateEnds();
 
   // Uygula ve çiz
   applyFilters();
